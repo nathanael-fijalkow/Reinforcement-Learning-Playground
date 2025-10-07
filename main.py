@@ -6,13 +6,14 @@ from src.dqn import train as train_dqn, DQNAgent
 from src.actor_critic import train as train_actor_critic, ActorCriticAgent
 from src.ppo import train as train_ppo, PPOAgent
 from src.dyna_q import train as train_dyna_q, DynaQAgent
+from src.random_agent import RandomAgent
 from src.environments import create_env, get_env_dimensions
 from src.policy_evaluation import evaluate_policy, run_simulation
 from src.plotting import plot_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Run RL algorithms")
-    parser.add_argument("algorithm", choices=["q_learning", "dqn", "actor_critic", "ppo", "dyna_q"], help="The algorithm to run")
+    parser.add_argument("algorithm", choices=["q_learning", "dqn", "actor_critic", "ppo", "dyna_q", "random"], help="The algorithm to run")
     parser.add_argument("environment", help="The environment name from Gymnasium")
     parser.add_argument("--num-episodes", type=int, default=None, help="Number of training episodes")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps per episode")
@@ -66,7 +67,11 @@ def main():
             agent = PPOAgent(state_dim, action_dim)
         elif args.algorithm == "dyna_q":
             agent = DynaQAgent(state_dim, action_dim)
-        agent.load(args.load_model)
+        elif args.algorithm == "random":
+            agent = RandomAgent(action_dim)
+        
+        if args.algorithm != "random":  # Random agent has no parameters to load
+            agent.load(args.load_model)
     else:
         if args.algorithm == "q_learning":
             assert(setting == "discrete")
@@ -83,6 +88,11 @@ def main():
         elif args.algorithm == "dyna_q":
             assert(setting == "discrete")
             agent, scores = train_dyna_q(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
+        elif args.algorithm == "random":
+            # Random agent doesn't need training
+            agent = RandomAgent(action_dim)
+            scores = []  # No scores to track for random agent
+            print(f"Created RandomAgent with action_dim={action_dim}")
         else:
             raise ValueError("Algorithm not supported")
 
@@ -91,10 +101,13 @@ def main():
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
         
-        extension = ".npy" if args.algorithm in ["q_learning", "dyna_q"] else ".pth"
-        model_path = os.path.join(model_dir, f"{args.algorithm}_{args.environment}{extension}")
-        agent.save(model_path)
-        print(f"Model saved to {model_path}")
+        if args.algorithm != "random":  # Random agent has no parameters to save
+            extension = ".npy" if args.algorithm in ["q_learning", "dyna_q"] else ".pth"
+            model_path = os.path.join(model_dir, f"{args.algorithm}_{args.environment}{extension}")
+            agent.save(model_path)
+            print(f"Model saved to {model_path}")
+        else:
+            print("RandomAgent: No parameters to save.")
 
     if args.plot and scores:
         plot_scores(scores, args.algorithm, args.environment)
