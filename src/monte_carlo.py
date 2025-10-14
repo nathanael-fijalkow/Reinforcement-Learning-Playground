@@ -7,12 +7,28 @@ class MonteCarlo(BaseAgent):
                  state_dim, 
                  action_dim):
         self.q_table = np.zeros((state_dim, action_dim))
-
+        self.gamma = 0.99
+        self.Learning_rate = 0.1
+        self.epsilon = 1.0
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        self.episode = []
     def select_action(self, state, greedy=False):
-        pass            
+        if greedy or np.random.rand() > self.epsilon:
+            return np.argmax(self.q_table[state])
+        else:
+            return np.random.choice(len(self.q_table[state]))            
 
     def learn(self, state, action, reward, next_state, done):
-        pass
+        self.episode.append((state, action, reward))
+        if done:
+            G = 0.0
+            for s, a, r in reversed(self.episode):
+                G = r + self.gamma * G
+                self.q_table[s, a] += self.Learning_rate * (G - self.q_table[s, a])
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+            self.episode = []
+
 
     def save(self, path):
         np.save(path, self.q_table)
