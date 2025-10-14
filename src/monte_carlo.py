@@ -5,7 +5,7 @@ from src.base_agent import BaseAgent
 class MonteCarlo(BaseAgent):
     def __init__(self, 
                  state_dim, 
-                 action_dim, epsilon=1.0, epsilon_decay=0.995, epsilon_min=0.01, learning_rate=0.1, gamma=0.9):
+                 action_dim, epsilon=1.0, epsilon_decay=0.9995, epsilon_min=0.01, learning_rate=0.1, gamma=0.99):
         self.q_table = np.zeros((state_dim, action_dim))
         self.action_dim = action_dim
         self.epsilon = epsilon
@@ -25,7 +25,7 @@ class MonteCarlo(BaseAgent):
         G = 0
         for state,action,reward in reversed(trajectory):
             G = reward + self.gamma * G
-            self.q_table[state][action] += self.learning_rate*(G - self.q_table[state][action])
+            self.q_table[state, action] += self.learning_rate*(G - self.q_table[state, action])
 
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
@@ -52,7 +52,7 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
-            trajectory.append([state,action,reward])
+            trajectory.append((state,action,reward))
 
             state = next_state
             episode_reward += reward
