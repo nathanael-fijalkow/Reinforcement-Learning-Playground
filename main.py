@@ -1,19 +1,86 @@
 import argparse
 import os
 import gymnasium as gym
-from src.q_learning import train as train_q_learning, QLearningAgent
-from src.dqn import train as train_dqn, DQNAgent
-from src.actor_critic import train as train_actor_critic, ActorCriticAgent
-from src.ppo import train as train_ppo, PPOAgent
-from src.dyna_q import train as train_dyna_q, DynaQAgent
-from src.random_agent import RandomAgent
+
+AVAILABLE_ALGORITHMS = {}
+
+try:
+    from src.random_agent import RandomAgent
+    AVAILABLE_ALGORITHMS["random"] = {
+        "agent": RandomAgent,
+        "trainer": None,  # Random agent doesn't need training
+        "setting": "any"
+    }
+except ImportError as e:
+    print(f"Random agent not yet implemented")
+
+try:
+    from src.monte_carlo import train as train_monte_carlo, MonteCarlo
+    AVAILABLE_ALGORITHMS["monte_carlo"] = {
+        "agent": MonteCarlo,
+        "trainer": train_monte_carlo,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Monte Carlo not yet implemented")
+
+try:
+    from src.q_learning import train as train_q_learning, QLearningAgent
+    AVAILABLE_ALGORITHMS["q_learning"] = {
+        "agent": QLearningAgent,
+        "trainer": train_q_learning,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Q-Learning not yet implemented")
+
+try:
+    from src.dyna_q import train as train_dyna_q, DynaQAgent
+    AVAILABLE_ALGORITHMS["dyna_q"] = {
+        "agent": DynaQAgent,
+        "trainer": train_dyna_q,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Dyna-Q not yet implemented")
+
+try:
+    from src.dqn import train as train_dqn, DQNAgent
+    AVAILABLE_ALGORITHMS["dqn"] = {
+        "agent": DQNAgent,
+        "trainer": train_dqn,
+        "setting": "continuous"
+    }
+except ImportError as e:
+    print(f"DQN not yet implemented")
+
+try:
+    from src.actor_critic import train as train_actor_critic, ActorCriticAgent
+    AVAILABLE_ALGORITHMS["actor_critic"] = {
+        "agent": ActorCriticAgent,
+        "trainer": train_actor_critic,
+        "setting": "continuous"
+    }
+except ImportError as e:
+    print(f"Actor-Critic not yet implemented")
+
+try:
+    from src.ppo import train as train_ppo, PPOAgent
+    AVAILABLE_ALGORITHMS["ppo"] = {
+        "agent": PPOAgent,
+        "trainer": train_ppo,
+        "setting": "continuous"
+    }
+except ImportError as e:
+    print(f"PPO not yet implemented")
+
 from src.environments import create_env, get_env_dimensions
 from src.policy_evaluation import evaluate_policy, run_simulation
 from src.plotting import plot_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Run RL algorithms")
-    parser.add_argument("algorithm", choices=["q_learning", "dqn", "actor_critic", "ppo", "dyna_q", "random"], help="The algorithm to run")
+    parser.add_argument("algorithm", choices=list(AVAILABLE_ALGORITHMS.keys()), help="The algorithm to run")
     parser.add_argument("environment", help="The environment name from Gymnasium")
     parser.add_argument("--num-episodes", type=int, default=None, help="Number of training episodes")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps per episode")
@@ -55,46 +122,27 @@ def main():
 
     agent = None
     scores = []
+    
+    algo_params = AVAILABLE_ALGORITHMS[args.algorithm]
+    AgentClass = algo_params["agent"]
+    trainer = algo_params["trainer"]
+    required_setting = algo_params["setting"]
+
+    if required_setting != "any" and setting != required_setting:
+        raise ValueError(f"Algorithm '{args.algorithm}' requires a {required_setting} environment, but got a {setting} one.")
+
     if args.load_model:
         print(f"Loading agent for {args.algorithm} from {args.load_model}...")
-        if args.algorithm == "q_learning":
-            agent = QLearningAgent(state_dim, action_dim)
-        elif args.algorithm == "dqn":
-            agent = DQNAgent(state_dim, action_dim)
-        elif args.algorithm == "actor_critic":
-            agent = ActorCriticAgent(state_dim, action_dim)
-        elif args.algorithm == "ppo":
-            agent = PPOAgent(state_dim, action_dim)
-        elif args.algorithm == "dyna_q":
-            agent = DynaQAgent(state_dim, action_dim)
-        elif args.algorithm == "random":
-            agent = RandomAgent(action_dim)
-        
-        if args.algorithm != "random":  # Random agent has no parameters to load
+        agent = AgentClass(state_dim, action_dim)
+        if args.algorithm != "random":
             agent.load(args.load_model)
     else:
-        if args.algorithm == "q_learning":
-            assert(setting == "discrete")
-            agent, scores = train_q_learning(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
-        elif args.algorithm == "dqn":
-            assert(setting == "continuous")
-            agent, scores = train_dqn(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
-        elif args.algorithm == "actor_critic":
-            assert(setting == "continuous")
-            agent, scores = train_actor_critic(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
-        elif args.algorithm == "ppo":
-            assert(setting == "continuous")
-            agent, scores = train_ppo(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
-        elif args.algorithm == "dyna_q":
-            assert(setting == "discrete")
-            agent, scores = train_dyna_q(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
-        elif args.algorithm == "random":
-            # Random agent doesn't need training
-            agent = RandomAgent(action_dim)
-            scores = []  # No scores to track for random agent
-            print(f"Created RandomAgent with action_dim={action_dim}")
+        if trainer:
+            agent, scores = trainer(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
         else:
-            raise ValueError("Algorithm not supported")
+            agent = AgentClass(action_dim)
+            print(f"Created {AgentClass.__name__} with action_dim={action_dim}")
+            scores = []
 
     if args.save_model:
         model_dir = "models"
@@ -102,7 +150,7 @@ def main():
             os.makedirs(model_dir)
         
         if args.algorithm != "random":  # Random agent has no parameters to save
-            extension = ".npy" if args.algorithm in ["q_learning", "dyna_q"] else ".pth"
+            extension = ".pth" if AVAILABLE_ALGORITHMS[args.algorithm]['setting'] == 'continuous' else ".npy"
             model_path = os.path.join(model_dir, f"{args.algorithm}_{args.environment}{extension}")
             agent.save(model_path)
             print(f"Model saved to {model_path}")
