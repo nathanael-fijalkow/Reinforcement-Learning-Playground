@@ -2,10 +2,11 @@ import argparse
 import os
 import gymnasium as gym
 from src.q_learning import train as train_q_learning, QLearningAgent
-from src.dqn import train as train_dqn, DQNAgent
-from src.actor_critic import train as train_actor_critic, ActorCriticAgent
-from src.ppo import train as train_ppo, PPOAgent
-from src.dyna_q import train as train_dyna_q, DynaQAgent
+from src.monte_carlo import train as train_montecarlo, MonteCarlo
+#from src.dqn import train as train_dqn, DQNAgent
+#from src.actor_critic import train as train_actor_critic, ActorCriticAgent
+#from src.ppo import train as train_ppo, PPOAgent
+#from src.dyna_q import train as train_dyna_q, DynaQAgent
 from src.random_agent import RandomAgent
 from src.environments import create_env, get_env_dimensions
 from src.policy_evaluation import evaluate_policy, run_simulation
@@ -13,7 +14,7 @@ from src.plotting import plot_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Run RL algorithms")
-    parser.add_argument("algorithm", choices=["q_learning", "dqn", "actor_critic", "ppo", "dyna_q", "random"], help="The algorithm to run")
+    parser.add_argument("algorithm", choices=["q_learning", "montecarlo", "dqn", "actor_critic", "ppo", "dyna_q", "random"], help="The algorithm to run")
     parser.add_argument("environment", help="The environment name from Gymnasium")
     parser.add_argument("--num-episodes", type=int, default=None, help="Number of training episodes")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps per episode")
@@ -61,6 +62,8 @@ def main():
             agent = QLearningAgent(state_dim, action_dim)
         elif args.algorithm == "dqn":
             agent = DQNAgent(state_dim, action_dim)
+        elif args.algorithm == "montecarlo":
+            agent = MonteCarlo(state_dim, action_dim)
         elif args.algorithm == "actor_critic":
             agent = ActorCriticAgent(state_dim, action_dim)
         elif args.algorithm == "ppo":
@@ -79,6 +82,9 @@ def main():
         elif args.algorithm == "dqn":
             assert(setting == "continuous")
             agent, scores = train_dqn(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
+        elif args.algorithm == "montecarlo":
+            assert(setting == "discrete")
+            agent, scores = train_montecarlo(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
         elif args.algorithm == "actor_critic":
             assert(setting == "continuous")
             agent, scores = train_actor_critic(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
