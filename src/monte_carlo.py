@@ -1,18 +1,39 @@
 import numpy as np
 from collections import deque
 from src.base_agent import BaseAgent
-
 class MonteCarlo(BaseAgent):
     def __init__(self, 
-                 state_dim, 
-                 action_dim):
+                state_dim, 
+                action_dim, 
+                learning_rate=0.1, 
+                gamma=0.99, 
+                epsilon=1.0, 
+                epsilon_decay=0.995, 
+                epsilon_min=0.01):
         self.q_table = np.zeros((state_dim, action_dim))
+        self.lr = learning_rate
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
+        self.action_dim = action_dim
+
 
     def select_action(self, state, greedy=False):
-        pass            
+        proba = np.random.rand()
+        if greedy or proba > self.epsilon: 
+            return np.argmax(self.q_table[state])
+        else :
+            return np.random.choice(self.action_dim)
 
-    def learn(self, state, action, reward, next_state, done):
-        pass
+
+    def learn(self, trajectory):
+        G = 0
+        for state, action, reward in reversed(trajectory):
+            G = reward + self.gamma * G
+            self.q_table[state,action] += self.lr * (G - self.q_table[state,action])
+
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
     def save(self, path):
         np.save(path, self.q_table)
@@ -30,6 +51,8 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
 
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
+        trajectory = []
+
         episode_reward = 0
         
         for step in range(max_steps_per_episode):
@@ -37,13 +60,16 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
-            agent.learn(state, action, reward, next_state, done)
+            trajectory.append((state, action, reward))
 
             state = next_state
             episode_reward += reward
 
             if done:
                 break
+        
+        agent.learn(trajectory)
+
 
         scores_deque.append(episode_reward)
         scores.append(episode_reward)
