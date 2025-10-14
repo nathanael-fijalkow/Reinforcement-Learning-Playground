@@ -1,11 +1,12 @@
 import argparse
 import os
 import gymnasium as gym
+from src.monte_carlo import train as train_monte_carlo, MonteCarlo
 from src.q_learning import train as train_q_learning, QLearningAgent
-from src.dqn import train as train_dqn, DQNAgent
-from src.actor_critic import train as train_actor_critic, ActorCriticAgent
-from src.ppo import train as train_ppo, PPOAgent
-from src.dyna_q import train as train_dyna_q, DynaQAgent
+#from src.dqn import train as train_dqn, DQNAgent
+#from src.actor_critic import train as train_actor_critic, ActorCriticAgent
+#from src.ppo import train as train_ppo, PPOAgent
+#from src.dyna_q import train as train_dyna_q, DynaQAgent
 from src.random_agent import RandomAgent
 from src.environments import create_env, get_env_dimensions
 from src.policy_evaluation import evaluate_policy, run_simulation
@@ -13,7 +14,7 @@ from src.plotting import plot_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Run RL algorithms")
-    parser.add_argument("algorithm", choices=["q_learning", "dqn", "actor_critic", "ppo", "dyna_q", "random"], help="The algorithm to run")
+    parser.add_argument("algorithm", choices=["q_learning", "dqn", "actor_critic", "ppo", "dyna_q", "random", "monte_carlo"], help="The algorithm to run")
     parser.add_argument("environment", help="The environment name from Gymnasium")
     parser.add_argument("--num-episodes", type=int, default=None, help="Number of training episodes")
     parser.add_argument("--max-steps", type=int, default=None, help="Maximum steps per episode")
@@ -69,6 +70,8 @@ def main():
             agent = DynaQAgent(state_dim, action_dim)
         elif args.algorithm == "random":
             agent = RandomAgent(action_dim)
+        elif args.algorithm == "monte_carlo":
+            agent = MonteCarlo(action_dim)
         
         if args.algorithm != "random":  # Random agent has no parameters to load
             agent.load(args.load_model)
@@ -93,6 +96,9 @@ def main():
             agent = RandomAgent(action_dim)
             scores = []  # No scores to track for random agent
             print(f"Created RandomAgent with action_dim={action_dim}")
+        elif args.algorithm == "monte_carlo":
+            assert(setting == "discrete")
+            agent, scores = train_monte_carlo(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score)
         else:
             raise ValueError("Algorithm not supported")
 
