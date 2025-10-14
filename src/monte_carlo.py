@@ -8,7 +8,7 @@ class MonteCarlo(BaseAgent):
                  action_dim,
                  learning_rate=0.1, 
                  gamma=0.99, 
-                 epsilon=1.5, 
+                 epsilon=1.0, 
                  epsilon_decay=0.995, 
                  epsilon_min=0.01):
         self.q_table = np.zeros((state_dim, action_dim))
