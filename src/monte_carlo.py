@@ -1,18 +1,41 @@
 import numpy as np
-from collections import deque
+from collections import defaultdict, deque
 from src.base_agent import BaseAgent
 
 class MonteCarlo(BaseAgent):
-    def __init__(self, 
-                 state_dim, 
-                 action_dim):
+    def __init__(self, state_dim, action_dim, epsilon=1.5, gamma=0.99, 
+                 epsilon_decay=0.995, 
+                 epsilon_min=0.01, alpha=0.1, alpha_decay=0.995, alpha_min=0.01):
         self.q_table = np.zeros((state_dim, action_dim))
+        self.epsilon = epsilon
+        self.gamma = gamma
+        self.action_dim = action_dim
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
+        self.alpha = alpha
+        self.alpha_decay = alpha_decay
+        self.alpha_min = alpha_min
 
     def select_action(self, state, greedy=False):
-        pass            
+        if not greedy and np.random.rand() <= self.epsilon:
+            return np.random.choice(self.action_dim)
+        else:
+            return np.argmax(self.q_table[state, :])
 
-    def learn(self, state, action, reward, next_state, done):
-        pass
+    def learn(self, trajectory):
+        G = 0
+        visited = set()
+
+        # traverse the trajectory in reverse
+        for (state, action, reward) in reversed(trajectory):
+            G = reward + self.gamma * G
+            if (state, action) not in visited: 
+                visited.add((state, action))
+                self.q_table[state, action] += self.alpha * (G - self.q_table[state, action])
+        
+        # epsilon and lr exponential decay
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+        self.alpha = max(self.alpha_min, self.alpha * self.alpha_decay)
 
     def save(self, path):
         np.save(path, self.q_table)
@@ -20,30 +43,33 @@ class MonteCarlo(BaseAgent):
     def load(self, path):
         self.q_table = np.load(path)
 
+
 def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
     agent = MonteCarlo(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
-
     print("Starting Monte Carlo training...")
 
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         episode_reward = 0
-        
+
+        episode_trajectory = []
+
         for step in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
-            agent.learn(state, action, reward, next_state, done)
-
+            episode_trajectory.append((state, action, reward)) # storing the transition
             state = next_state
             episode_reward += reward
 
             if done:
                 break
+
+        agent.learn(episode_trajectory) # after a full episode we update values
 
         scores_deque.append(episode_reward)
         scores.append(episode_reward)
@@ -55,7 +81,5 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
             break
 
-    
     print("\nTraining complete.")
-    
     return agent, scores
