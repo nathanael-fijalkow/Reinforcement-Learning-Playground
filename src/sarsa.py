@@ -27,8 +27,8 @@ class Sarsa(BaseAgent):
 
     def learn(self, state, action, reward, next_state, done):
         old_value = self.q_table[state, action]
-
-        new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * next_state)
+        next_action = self.select_action(next_state)
+        new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * self.q_table[next_state, next_action])
         self.q_table[state, action] = new_value
 
         if done:
