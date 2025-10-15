@@ -25,6 +25,16 @@ except ImportError as e:
     print(f"Monte Carlo not yet implemented")
 
 try:
+    from src.sarsa import train as train_sarsa, SARSA
+    AVAILABLE_ALGORITHMS["SARSA"] = {
+        "agent": SARSA,
+        "trainer": train_sarsa,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"SARSA not yet implemented")
+
+try:
     from src.q_learning import train as train_q_learning, QLearningAgent
     AVAILABLE_ALGORITHMS["q_learning"] = {
         "agent": QLearningAgent,
@@ -73,6 +83,7 @@ try:
     }
 except ImportError as e:
     print(f"PPO not yet implemented")
+
 
 from src.environments import create_env, get_env_dimensions
 from src.policy_evaluation import evaluate_policy, run_simulation
