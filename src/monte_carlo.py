@@ -68,6 +68,8 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
                 break
         agent.learn(trajectory)
 
+        agent.learn(trajectory)
+
         scores_deque.append(episode_reward)
         scores.append(episode_reward)
 
@@ -78,7 +80,6 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
             break
 
-    
     print("\nTraining complete.")
     
     return agent, scores
