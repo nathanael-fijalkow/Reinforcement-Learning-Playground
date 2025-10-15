@@ -2,7 +2,7 @@ import numpy as np
 from collections import deque
 from src.base_agent import BaseAgent
 
-class QLearningAgent(BaseAgent):
+class SarsaAgent(BaseAgent):
     def __init__(self, 
                  state_dim, 
                  action_dim, 
@@ -18,6 +18,7 @@ class QLearningAgent(BaseAgent):
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.action_dim = action_dim
+
 
     def select_action(self, state, greedy=False):
         if not greedy and np.random.rand() <= self.epsilon:
@@ -40,7 +41,7 @@ class QLearningAgent(BaseAgent):
         self.q_table = np.load(path)
 
 def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
-    agent = QLearningAgent(state_dim, action_dim)
+    agent = SarsaAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
