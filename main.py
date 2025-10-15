@@ -24,6 +24,7 @@ try:
 except ImportError as e:
     print(f"Monte Carlo not yet implemented")
 
+
 try:
     from src.q_learning import train as train_q_learning, QLearningAgent
     AVAILABLE_ALGORITHMS["q_learning"] = {
@@ -33,6 +34,17 @@ try:
     }
 except ImportError as e:
     print(f"Q-Learning not yet implemented")
+
+try:
+    from src.q_learning_per import train as train_q_learning_per, QLearningPERAgent
+    AVAILABLE_ALGORITHMS["q_learning_per"] = {
+        "agent": QLearningPERAgent,
+        "trainer": train_q_learning_per,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Q-Learning not yet implemented")
+
 
 try:
     from src.dyna_q import train as train_dyna_q, DynaQAgent
