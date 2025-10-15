@@ -4,6 +4,17 @@ import gymnasium as gym
 
 AVAILABLE_ALGORITHMS = {}
 
+
+
+try:
+    from src.sarsa import SARSAAgent, train as train_sarsa
+    AVAILABLE_ALGORITHMS["Sarsa"] = {
+        "agent": SARSAAgent,
+        "trainer": train_sarsa,  
+        "setting": "any"
+    }
+except ImportError as e:
+    print(f"SARSA agent not yet implemented")
 try:
     from src.random_agent import RandomAgent
     AVAILABLE_ALGORITHMS["random"] = {
