@@ -5,14 +5,42 @@ from src.base_agent import BaseAgent
 class MonteCarlo(BaseAgent):
     def __init__(self, 
                  state_dim, 
-                 action_dim):
+                 action_dim, 
+                 learning_rate=0.1, 
+                 gamma=0.99, 
+                 epsilon=1.0, 
+                 epsilon_decay=0.995, 
+                 epsilon_min=0.01):
         self.q_table = np.zeros((state_dim, action_dim))
+        self.lr = learning_rate
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.epsilon_min = epsilon_min
+        self.action_dim = action_dim
+        self.trajectory = []
 
     def select_action(self, state, greedy=False):
-        pass            
+        if not greedy and np.random.rand() <= self.epsilon:
+            return np.random.choice(self.action_dim)
+        else:
+            return np.argmax(self.q_table[state, :])         
 
     def learn(self, state, action, reward, next_state, done):
-        pass
+        self.trajectory.append((state, action, reward))
+
+        if done:
+            G = 0
+            visited = set()
+            for s, a, r in reversed(self.trajectory):
+                G = self.gamma * G + r
+                if (s, a) not in visited:
+                    visited.add((s, a))
+                    old_value = self.q_table[s, a]
+                    self.q_table[s, a] = old_value + self.lr * (G - old_value)
+            self.lr *= self.lr_decay
+            self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+            self.trajectory = []
 
     def save(self, path):
         np.save(path, self.q_table)
