@@ -35,6 +35,16 @@ except ImportError as e:
     print(f"Q-Learning not yet implemented")
 
 try:
+    from src.double_q_learning import train as train_double_q_learning, DoubleQLearningAgent
+    AVAILABLE_ALGORITHMS["double_q_learning"] = {
+        "agent": DoubleQLearningAgent,
+        "trainer": train_double_q_learning,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Double Q-Learning not yet implemented")
+
+try:
     from src.q_learning_experience_replay import train as train_q_learning_experience_replay, QLearningExpReplayAgent
     AVAILABLE_ALGORITHMS["q_learning_experience_replay"] = {
         "agent": QLearningExpReplayAgent,
