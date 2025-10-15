@@ -6,13 +6,17 @@ class MonteCarlo(BaseAgent):
     def __init__(self, 
                  state_dim, 
                  action_dim, 
-                 learning_rate=0.1, 
+                 learning_rate=0.1,
+                 lr_decay=0.995,
+                 lr_min=0.001, 
                  gamma=0.99, 
                  epsilon=1.0, 
                  epsilon_decay=0.995, 
                  epsilon_min=0.01):
         self.q_table = np.zeros((state_dim, action_dim))
         self.lr = learning_rate
+        self.lr_decay = lr_decay
+        self.lr_min = lr_min
         self.gamma = gamma
         self.epsilon = epsilon
         self.epsilon_decay = epsilon_decay
@@ -33,6 +37,7 @@ class MonteCarlo(BaseAgent):
             new_value = old_value + self.lr * (G - old_value)
             self.q_table[state, action] = new_value
         
+        self.lr = max(self.lr_min, self.lr * self.lr_decay)
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
     def save(self, path):
