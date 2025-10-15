@@ -58,6 +58,15 @@ def main():
 
     agent = None
     scores = []
+    
+    algo_params = AVAILABLE_ALGORITHMS[args.algorithm]
+    AgentClass = algo_params["agent"]
+    trainer = algo_params["trainer"]
+    required_setting = algo_params["setting"]
+
+    if required_setting != "any" and setting != required_setting:
+        raise ValueError(f"Algorithm '{args.algorithm}' requires a {required_setting} environment, but got a {setting} one.")
+
     if args.load_model:
         print(f"Loading agent for {args.algorithm} from {args.load_model}...")
         if args.algorithm == "q_learning":
@@ -107,7 +116,9 @@ def main():
             scores = []  # No scores to track for random agent
             print(f"Created RandomAgent with action_dim={action_dim}")
         else:
-            raise ValueError("Algorithm not supported")
+            agent = AgentClass(action_dim)
+            print(f"Created {AgentClass.__name__} with action_dim={action_dim}")
+            scores = []
 
     if args.save_model:
         model_dir = "models"
@@ -115,7 +126,7 @@ def main():
             os.makedirs(model_dir)
         
         if args.algorithm != "random":  # Random agent has no parameters to save
-            extension = ".npy" if args.algorithm in ["q_learning", "dyna_q"] else ".pth"
+            extension = ".pth" if AVAILABLE_ALGORITHMS[args.algorithm]['setting'] == 'continuous' else ".npy"
             model_path = os.path.join(model_dir, f"{args.algorithm}_{args.environment}{extension}")
             agent.save(model_path)
             print(f"Model saved to {model_path}")

@@ -54,7 +54,8 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
         trajectory = []
 
         episode_reward = 0
-        
+        trajectory = []
+
         for step in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -71,6 +72,8 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
         agent.learn(trajectory)
 
 
+        agent.learn(trajectory)
+
         scores_deque.append(episode_reward)
         scores.append(episode_reward)
 
@@ -81,7 +84,6 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
             break
 
-    
     print("\nTraining complete.")
     
     return agent, scores
