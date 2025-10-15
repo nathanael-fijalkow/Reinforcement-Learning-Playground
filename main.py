@@ -14,6 +14,17 @@ try:
 except ImportError as e:
     print(f"Random agent not yet implemented")
 
+
+try:
+    from src.sarsa import train as train_sarsa, SarsaAgent
+    AVAILABLE_ALGORITHMS["sarsa"] = {
+        "agent": SarsaAgent,
+        "trainer": train_sarsa,  # Random agent doesn't need training
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Sarsa not yet implemented")
+
 try:
     from src.monte_carlo import train as train_monte_carlo, MonteCarlo
     AVAILABLE_ALGORITHMS["monte_carlo"] = {
