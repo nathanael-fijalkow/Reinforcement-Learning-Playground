@@ -48,42 +48,43 @@ class MonteCarlo(BaseAgent):
     def load(self, path):
         self.q_table = np.load(path)
 
-def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
-    agent = MonteCarlo(state_dim, action_dim)
 
-    scores_deque = deque(maxlen=100)
-    scores = []
+    def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
+        agent = MonteCarlo(state_dim, action_dim)
 
-    print("Starting Monte Carlo training...")
+        scores_deque = deque(maxlen=100)
+        scores = []
 
-    for episode in range(1, num_episodes + 1):
-        state, _ = env.reset()
-        episode_reward = 0
-        
-        for step in range(max_steps_per_episode):
-            action = agent.select_action(state)
-            next_state, reward, terminated, truncated, _ = env.step(action)
-            done = terminated or truncated
+        print("Starting Monte Carlo training...")
 
-            agent.learn(state, action, reward, next_state, done)
+        for episode in range(1, num_episodes + 1):
+            state, _ = env.reset()
+            episode_reward = 0
+            
+            for step in range(max_steps_per_episode):
+                action = agent.select_action(state)
+                next_state, reward, terminated, truncated, _ = env.step(action)
+                done = terminated or truncated
 
-            state = next_state
-            episode_reward += reward
+                agent.learn(state, action, reward, next_state, done)
 
-            if done:
+                state = next_state
+                episode_reward += reward
+
+                if done:
+                    break
+
+            scores_deque.append(episode_reward)
+            scores.append(episode_reward)
+
+            if episode % (num_episodes / 10) == 0:
+                print(f"Episode {episode}	Average Score: {np.mean(scores_deque):.2f}")
+            
+            if np.mean(scores_deque) >= target_score:
+                print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
                 break
 
-        scores_deque.append(episode_reward)
-        scores.append(episode_reward)
-
-        if episode % (num_episodes / 10) == 0:
-            print(f"Episode {episode}	Average Score: {np.mean(scores_deque):.2f}")
         
-        if np.mean(scores_deque) >= target_score:
-            print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
-            break
-
-    
-    print("\nTraining complete.")
-    
-    return agent, scores
+        print("\nTraining complete.")
+        
+        return agent, scores
