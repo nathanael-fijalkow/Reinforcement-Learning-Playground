@@ -2,7 +2,7 @@ import numpy as np
 from collections import deque
 from src.base_agent import BaseAgent
 
-class QLearningAgent(BaseAgent):
+class Sarsa(BaseAgent):
     def __init__(self, 
                  state_dim, 
                  action_dim, 
@@ -42,12 +42,12 @@ class QLearningAgent(BaseAgent):
         self.q_table = np.load(path)
 
 def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
-    agent = QLearningAgent(state_dim, action_dim)
+    agent = Sarsa(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
 
-    print("Starting Q-Learning training...")
+    print("Starting Sarsa training...")
 
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
