@@ -2,6 +2,7 @@ import numpy as np
 from collections import deque
 from src.base_agent import BaseAgent
 
+
 class SarsaAgent(BaseAgent):
     def __init__(self, 
                  state_dim, 
