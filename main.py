@@ -35,6 +35,16 @@ except ImportError as e:
     print(f"Q-Learning not yet implemented")
 
 try:
+    from src.sarsa import train as train_sarsa, SARSAAgent
+    AVAILABLE_ALGORITHMS["sarsa"] = {
+        "agent": SARSAAgent,
+        "trainer": train_sarsa,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"SARSA not yet implemented")
+
+try:
     from src.q_learning_experience_replay import train as train_q_learning_experience_replay, QLearningExpReplayAgent
     AVAILABLE_ALGORITHMS["q_learning_experience_replay"] = {
         "agent": QLearningExpReplayAgent,
