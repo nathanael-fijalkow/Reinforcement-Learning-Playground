@@ -85,6 +85,6 @@ class MonteCarlo(BaseAgent):
                 break
 
         
-        print("\nTraining complete.")
+        print("\nTraining complete !.")
         
         return agent, scores
