@@ -1,23 +1,8 @@
 import numpy as np
-import random
-from collections import deque, namedtuple
+from collections import deque
 from src.base_agent import BaseAgent
 
-class ReplayBuffer:
-    def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
-
-    def push(self, *args):
-        """Save a transition"""
-        self.memory.append(Transition(*args))
-
-    def sample(self):
-        return random.sample(self.memory, 1)[0]
-
-    def __len__(self):
-        return len(self.memory)
-
-class QLearningExpReplayAgent(BaseAgent):
+class QLearningAgent(BaseAgent):
     def __init__(self, 
                  state_dim, 
                  action_dim, 
@@ -25,8 +10,7 @@ class QLearningExpReplayAgent(BaseAgent):
                  gamma=0.99, 
                  epsilon=1.0, 
                  epsilon_decay=0.995, 
-                 epsilon_min=0.01,
-                 buffer_size=10000):
+                 epsilon_min=0.01):
         self.q_table = np.zeros((state_dim, action_dim))
         self.lr = learning_rate
         self.gamma = gamma
@@ -34,7 +18,6 @@ class QLearningExpReplayAgent(BaseAgent):
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.action_dim = action_dim
-        self.memory = ReplayBuffer(buffer_size)
 
     def select_action(self, state, greedy=False):
         if not greedy and np.random.rand() <= self.epsilon:
@@ -42,18 +25,16 @@ class QLearningExpReplayAgent(BaseAgent):
         else:
             return np.argmax(self.q_table[state, :])
 
-    def learn(self):
-        transition = self.memory.sample()
-        state, action, reward, next_state, done = transition
-
+    def learn(self, state, action, reward, next_state, done):
         old_value = self.q_table[state, action]
-        next_max = np.max(self.q_table[next_state, :])
-        new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * next_max)
-        self.q_table[state, action] = new_value
+        next_action = self.select_action(next_state)
+
+        new_value = self.lr * (reward + self.gamma * self.q_table[next_state, next_action] - old_value)
+        self.q_table[state, action] += new_value
 
         if done:
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-            
+
     def save(self, path):
         np.save(path, self.q_table)
 
@@ -61,7 +42,7 @@ class QLearningExpReplayAgent(BaseAgent):
         self.q_table = np.load(path)
 
 def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
-    agent = QLearningExpReplayAgent(state_dim, action_dim)
+    agent = QLearningAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
@@ -77,8 +58,7 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
-            agent.memory.push(state, action, reward, next_state, done)
-            agent.learn()
+            agent.learn(state, action, reward, next_state, done)
 
             state = next_state
             episode_reward += reward
