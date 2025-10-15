@@ -22,6 +22,7 @@ class SarsaAgent(BaseAgent):
     def select_action(self, state, greedy=False):
         if not greedy and np.random.rand() <= self.epsilon:
             return np.random.choice(self.action_dim)
+        
         else:
             return np.argmax(self.q_table[state, :])
 
