@@ -26,7 +26,7 @@ class MonteCarlo(BaseAgent):
         else:
             return np.argmax(self.q_table[state, :])        
 
-    def learn(self, state, action, reward, next_state, done):
+    def learn(self, trajectory, done):
         G = 0
         
         for state, action, reward in reversed(trajectory):
