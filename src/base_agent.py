@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from numpy import intp
 
 class BaseAgent(ABC):
     """
@@ -7,7 +8,7 @@ class BaseAgent(ABC):
     """
     
     @abstractmethod
-    def select_action(self, state, greedy=False) -> int:
+    def select_action(self, state, greedy=False) -> int | intp :
         """
         Selects an action based on the current state.
 
