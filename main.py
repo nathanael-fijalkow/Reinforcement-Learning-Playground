@@ -64,9 +64,69 @@ if not AVAILABLE_ALGORITHMS:
 print(f"\nTotal algorithms available: {len(AVAILABLE_ALGORITHMS)}")
 print(f"Algorithm keys: {list(AVAILABLE_ALGORITHMS.keys())}\n")
 
-from src.utils.environments import create_env, get_env_dimensions
-from src.utils.policy_evaluation import evaluate_policy, run_simulation
-from src.utils.plotting import plot_scores
+try:
+    from src.q_learning_experience_replay import train as train_q_learning_experience_replay, QLearningExpReplayAgent
+    AVAILABLE_ALGORITHMS["q_learning_experience_replay"] = {
+        "agent": QLearningExpReplayAgent,
+        "trainer": train_q_learning_experience_replay,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Q-Learning not yet implemented")
+
+try:
+    from src.q_learning_prioritized_experience_replay import train as train_q_learning_prioritized_experience_replay, QLearningPrioExpReplayAgent
+    AVAILABLE_ALGORITHMS["q_learning_prioritized_experience_replay"] = {
+        "agent": QLearningPrioExpReplayAgent,
+        "trainer": train_q_learning_prioritized_experience_replay,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Q-Learning with Prioritized Experience Replay not yet implemented")
+
+try:
+    from src.dyna_q import train as train_dyna_q, DynaQAgent
+    AVAILABLE_ALGORITHMS["dyna_q"] = {
+        "agent": DynaQAgent,
+        "trainer": train_dyna_q,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Dyna-Q not yet implemented")
+
+try:
+    from src.dqn import train as train_dqn, DQNAgent
+    AVAILABLE_ALGORITHMS["dqn"] = {
+        "agent": DQNAgent,
+        "trainer": train_dqn,
+        "setting": "continuous"
+    }
+except ImportError as e:
+    print(f"DQN not yet implemented")
+
+try:
+    from src.actor_critic import train as train_actor_critic, ActorCriticAgent
+    AVAILABLE_ALGORITHMS["actor_critic"] = {
+        "agent": ActorCriticAgent,
+        "trainer": train_actor_critic,
+        "setting": "continuous"
+    }
+except ImportError as e:
+    print(f"Actor-Critic not yet implemented")
+
+try:
+    from src.ppo import train as train_ppo, PPOAgent
+    AVAILABLE_ALGORITHMS["ppo"] = {
+        "agent": PPOAgent,
+        "trainer": train_ppo,
+        "setting": "continuous"
+    }
+except ImportError as e:
+    print(f"PPO not yet implemented")
+
+from src.environments import create_env, get_env_dimensions
+from src.policy_evaluation import evaluate_policy, run_simulation
+from src.plotting import plot_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Run RL algorithms")
