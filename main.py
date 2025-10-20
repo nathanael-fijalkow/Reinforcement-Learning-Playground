@@ -124,9 +124,9 @@ try:
 except ImportError as e:
     print(f"PPO not yet implemented")
 
-from src.environments import create_env, get_env_dimensions
-from src.policy_evaluation import evaluate_policy, run_simulation
-from src.plotting import plot_scores
+from src.utils.environments import create_env, get_env_dimensions
+from src.utils.policy_evaluation import evaluate_policy, run_simulation
+from src.utils.plotting import plot_scores
 
 def main():
     parser = argparse.ArgumentParser(description="Run RL algorithms")
