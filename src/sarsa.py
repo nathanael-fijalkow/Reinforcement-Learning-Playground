@@ -2,7 +2,7 @@ import numpy as np
 from collections import deque
 from src.base_agent import BaseAgent
 
-class QLearningAgent(BaseAgent):
+class SARSAAgent(BaseAgent):
     def __init__(self, 
                  state_dim, 
                  action_dim, 
@@ -27,9 +27,10 @@ class QLearningAgent(BaseAgent):
 
     def learn(self, state, action, reward, next_state, done):
         old_value = self.q_table[state, action]
-        next_action = self.select_action(next_state)
+        next_max = self.q_table[next_state, self.select_action(next_state)]  ## important modification
 
-        self.q_table[state, action] += self.lr * (reward + self.gamma * self.q_table[next_state, next_action] - old_value)
+        new_value = (1 - self.lr) * old_value + self.lr * (reward + self.gamma * next_max)
+        self.q_table[state, action] = new_value
 
         if done:
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
@@ -41,17 +42,16 @@ class QLearningAgent(BaseAgent):
         self.q_table = np.load(path)
 
 def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
-    agent = QLearningAgent(state_dim, action_dim)
+    agent = SARSAAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
 
-    print("Starting Q-Learning training...")
+    print("Starting SARSA training...")
 
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         episode_reward = 0
-        
         for step in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
