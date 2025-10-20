@@ -52,7 +52,6 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         episode_reward = 0
-
         for step in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
