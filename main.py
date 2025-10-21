@@ -42,7 +42,17 @@ try:
         "setting": "discrete"
     }
 except ImportError as e:
-    print(f"Q-Learning not yet implemented")
+    print(f"Q-Learning Experience Replay not yet implemented")
+
+try:
+    from src.q_learning_experience_replay_prioritized import train as train_q_learning_experience_replay_prioritized, QLearningExpReplayAgent as QLearningExpReplayPrioritizedAgent
+    AVAILABLE_ALGORITHMS["q_learning_experience_replay_prioritized"] = {
+        "agent": QLearningExpReplayPrioritizedAgent,
+        "trainer": train_q_learning_experience_replay_prioritized,
+        "setting": "discrete"
+    }
+except ImportError as e:
+    print(f"Q-Learning Experience Replay Prioritized not yet implemented")
 
 try:
     from src.dyna_q import train as train_dyna_q, DynaQAgent
