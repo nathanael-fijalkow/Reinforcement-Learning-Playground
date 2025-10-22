@@ -78,9 +78,8 @@ class VanillaDQNAgent(BaseAgent):
 
             # max(1) returns (value, index)
             # we want the index of the max log-probability so we take [1] from the result
-            # view(1, 1) adds batch dimension
             # item() returns the value as a Python number
-            return self.policy_net(state).max(1)[1].view(1, 1).item()
+            return self.policy_net(state).max(1)[1].item()
 
     def learn(self):
         # Do not learn if not enough samples in memory
