@@ -6,8 +6,7 @@ from src.base_agent import BaseAgent
 # Replay buffer
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
 
-# For simplicity, we use a basic replay buffer without prioritization
-# and using deque for storage
+# This is a basic replay buffer without prioritization and using deque for storage
 class ReplayBuffer:
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity)
@@ -17,6 +16,7 @@ class ReplayBuffer:
         self.memory.append(Transition(*args))
 
     def sample(self):
+        """Sample a single transition"""
         return random.sample(self.memory, 1)[0]
 
     def __len__(self):
@@ -58,7 +58,7 @@ class QLearningExpReplayAgent(BaseAgent):
 
         if done:
             self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-            
+
     def save(self, path):
         np.save(path, self.q_table)
 
@@ -82,8 +82,10 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
+            # Store the transition in memory
             agent.memory.push(state, action, reward, next_state, done)
-            agent.learn()
+            # Performs one step of the learning process
+            agent.learn() 
 
             state = next_state
             episode_reward += reward
