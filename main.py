@@ -96,6 +96,10 @@ def main():
         num_episodes = args.num_episodes if args.num_episodes is not None else 10000
         max_steps_per_episode = args.max_steps if args.max_steps is not None else 100
         target_score = args.target_score if args.target_score is not None else 0.95
+    elif env_name == "MountainCar-v0":
+        num_episodes = args.num_episodes if args.num_episodes is not None else 50000
+        max_steps_per_episode = args.max_steps if args.max_steps is not None else 200
+        target_score = args.target_score if args.target_score is not None else -110
     else:
         print(f"Using custom settings for environment: {env_name}")
         num_episodes = args.num_episodes if args.num_episodes is not None else 1000
