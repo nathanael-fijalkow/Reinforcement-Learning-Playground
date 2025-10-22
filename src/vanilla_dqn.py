@@ -141,7 +141,7 @@ class VanillaDQNAgent(BaseAgent):
 
 # Training loop
 def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
-    agent = DQNAgent(state_dim, action_dim)
+    agent = VanillaDQNAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
