@@ -1,12 +1,14 @@
 import gymnasium as gym
 from gymnasium import spaces
 
+
 def create_env(env_name, render_mode=None):
     """
     Creates a gymnasium environment.
     """
     env = gym.make(env_name, render_mode=render_mode)
     return env
+
 
 def get_env_dimensions(env):
     """

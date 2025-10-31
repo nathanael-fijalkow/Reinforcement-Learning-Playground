@@ -1,5 +1,7 @@
-import numpy as np
 import time
+
+import numpy as np
+
 
 def evaluate_policy(agent, env, episodes=100):
     """
@@ -24,6 +26,7 @@ def evaluate_policy(agent, env, episodes=100):
             state = next_state
         total_rewards.append(episode_reward)
     return np.mean(total_rewards)
+
 
 def run_simulation(agent, env):
     """

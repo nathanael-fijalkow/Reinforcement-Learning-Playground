@@ -1,18 +1,23 @@
-import numpy as np
 from collections import deque
+
+import numpy as np
+
 from src.base_agent import BaseAgent
 
+
 class MonteCarlo(BaseAgent):
-    def __init__(self, 
-                 state_dim, 
-                 action_dim,
-                 learning_rate=0.1, 
-                 lr_decay=0.995, 
-                 lr_min=0.001,
-                 gamma=0.99, 
-                 epsilon=1.0, 
-                 epsilon_decay=0.995, 
-                 epsilon_min=0.01):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        learning_rate=0.1,
+        lr_decay=0.995,
+        lr_min=0.001,
+        gamma=0.99,
+        epsilon=1.0,
+        epsilon_decay=0.995,
+        epsilon_min=0.01,
+    ):
         self.q_table = np.zeros((state_dim, action_dim))
         self.lr = learning_rate
         self.lr_decay = lr_decay
@@ -44,7 +49,10 @@ class MonteCarlo(BaseAgent):
     def load(self, path):
         self.q_table = np.load(path)
 
-def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
+
+def train(
+    env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score
+):
     agent = MonteCarlo(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
@@ -75,11 +83,13 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
 
         if episode % (num_episodes / 10) == 0:
             print(f"Episode {episode}	Average Score: {np.mean(scores_deque):.2f}")
-        
+
         if np.mean(scores_deque) >= target_score:
-            print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
+            print(
+                f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}"
+            )
             break
 
     print("\nTraining complete.")
-    
+
     return agent, scores

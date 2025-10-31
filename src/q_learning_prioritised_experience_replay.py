@@ -1,8 +1,13 @@
-import numpy as np
 from collections import deque, namedtuple
+
+import numpy as np
+
 from src.base_agent import BaseAgent
 
-Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
+Transition = namedtuple(
+    "Transition", ("state", "action", "reward", "next_state", "done")
+)
+
 
 # Prioritized Replay Buffer
 # Prioritized replay buffers determine how likely transitions are to be sampled based on their TD error (importance)
@@ -10,18 +15,18 @@ class PrioritizedReplayBuffer:
     def __init__(self, capacity, alpha=0.6):
         self.capacity = capacity
         self.memory = []
-        self.alpha = alpha # normalization exponent for priorities
-        self.priorities = np.zeros(capacity) # the weights of stored transitions
-        self.pos = 0 # position to insert the next transition
+        self.alpha = alpha  # normalization exponent for priorities
+        self.priorities = np.zeros(capacity)  # the weights of stored transitions
+        self.pos = 0  # position to insert the next transition
 
     def push(self, *args):
         """Save a transition."""
         # New transitions get maximum priority
         max_p = self.priorities.max() if self.memory else 1.0
-        
+
         if len(self.memory) < self.capacity:
             self.memory.append(None)
-        
+
         self.memory[self.pos] = Transition(*args)
         self.priorities[self.pos] = max_p
         # Update position
@@ -32,16 +37,16 @@ class PrioritizedReplayBuffer:
         # If memory is empty, return empty lists
         if len(self.memory) == 0:
             return [], []
-            
+
         # Get priorities, apply alpha
-        priorities = self.priorities[:len(self.memory)]
-        probs = priorities ** self.alpha
+        priorities = self.priorities[: len(self.memory)]
+        probs = priorities**self.alpha
         probs /= probs.sum()
 
         # Sample indices based on probabilities
         indices = np.random.choice(len(self.memory), batch_size, p=probs)
         samples = np.array([self.memory[i] for i in indices])
-        
+
         return samples, indices
 
     def update_priorities(self, indices, errors, epsilon=1e-5):
@@ -52,19 +57,22 @@ class PrioritizedReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
+
 class QLearningExpReplayAgent(BaseAgent):
-    def __init__(self, 
-                 state_dim, 
-                 action_dim, 
-                 learning_rate=0.1, 
-                 lr_decay=0.995, 
-                 lr_min=0.001,
-                 gamma=0.99, 
-                 epsilon=1.0, 
-                 epsilon_decay=0.995, 
-                 epsilon_min=0.01,
-                 batch_size=32,
-                 buffer_size=10000):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        learning_rate=0.1,
+        lr_decay=0.995,
+        lr_min=0.001,
+        gamma=0.99,
+        epsilon=1.0,
+        epsilon_decay=0.995,
+        epsilon_min=0.01,
+        batch_size=32,
+        buffer_size=10000,
+    ):
         self.q_table = np.zeros((state_dim, action_dim))
         self.lr = learning_rate
         self.lr_decay = lr_decay
@@ -94,21 +102,24 @@ class QLearningExpReplayAgent(BaseAgent):
 
         # Calculate TD error
         td_errors = batch.reward + self.gamma * next_max * (1 - batch.done) - old_values
-        
+
         # Update Q-table
         new_value = old_values + self.lr * td_errors
         self.q_table[batch.state, batch.action] = new_value
 
         # Update priority in buffer
         self.memory.update_priorities(batch_indices, td_errors)
-            
+
     def save(self, path):
         np.save(path, self.q_table)
 
     def load(self, path):
         self.q_table = np.load(path)
 
-def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
+
+def train(
+    env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score
+):
     agent = QLearningExpReplayAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
@@ -119,7 +130,7 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         episode_reward = 0
-        
+
         for _ in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
@@ -129,12 +140,14 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             agent.memory.push(state, action, reward, next_state, done)
             # Performs one step of the learning process
             agent.learn()
-            
+
             state = next_state
             episode_reward += reward
 
             if done:
-                agent.epsilon = max(agent.epsilon_min, agent.epsilon * agent.epsilon_decay)
+                agent.epsilon = max(
+                    agent.epsilon_min, agent.epsilon * agent.epsilon_decay
+                )
                 agent.lr = max(agent.lr_min, agent.lr * agent.lr_decay)
                 break
 
@@ -143,12 +156,13 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
 
         if episode % (num_episodes / 10) == 0:
             print(f"Episode {episode}	Average Score: {np.mean(scores_deque):.2f}")
-        
+
         if np.mean(scores_deque) >= target_score:
-            print(f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
+            print(
+                f"Environment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}"
+            )
             break
 
-    
     print("\nTraining complete.")
-    
+
     return agent, scores

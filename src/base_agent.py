@@ -1,14 +1,16 @@
 from abc import ABC, abstractmethod
+
 from numpy import intp
+
 
 class BaseAgent(ABC):
     """
     An abstract base class for all Reinforcement Learning agents.
     This class defines the common interface that every agent must implement.
     """
-    
+
     @abstractmethod
-    def select_action(self, state, greedy=False) -> int | intp :
+    def select_action(self, state, greedy=False) -> int | intp:
         """
         Selects an action based on the current state.
 

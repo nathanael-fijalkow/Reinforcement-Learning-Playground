@@ -1,30 +1,37 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import numpy as np
 import random
 from collections import deque, namedtuple
+
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
 from src.base_agent import BaseAgent
+
 
 # Q-Network
 class DQN(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_size=128):
         super(DQN, self).__init__()
-        
+
         self.net = nn.Sequential(
             nn.Linear(state_dim, hidden_size),
-            nn.ReLU(),                        
+            nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, action_dim)
+            nn.Linear(hidden_size, action_dim),
         )
 
     def forward(self, state):
         return self.net(state)
 
+
 # Replay buffer
-Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
+Transition = namedtuple(
+    "Transition", ("state", "action", "reward", "next_state", "done")
+)
+
 
 # Basic replay buffer without prioritization using deque for storage
 class ReplayBuffer:
@@ -41,17 +48,20 @@ class ReplayBuffer:
     def __len__(self):
         return len(self.memory)
 
+
 class VanillaDQNAgent(BaseAgent):
-    def __init__(self, 
-                 state_dim, 
-                 action_dim, 
-                 lr=1e-4, 
-                 gamma=0.99, 
-                 epsilon=1.0, 
-                 epsilon_decay=0.995, 
-                 epsilon_min=0.01, 
-                 buffer_size=10000, 
-                 batch_size=64):
+    def __init__(
+        self,
+        state_dim,
+        action_dim,
+        lr=1e-4,
+        gamma=0.99,
+        epsilon=1.0,
+        epsilon_decay=0.995,
+        epsilon_min=0.01,
+        buffer_size=10000,
+        batch_size=64,
+    ):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
@@ -92,8 +102,10 @@ class VanillaDQNAgent(BaseAgent):
         # We need to convert batch-array of Transitions to tensors
         # Each state in batch.state is a numpy array of shape (state_dim,)
         # So we convert each to tensor and then concatenate along batch dimension
-        state_batch = torch.cat([torch.from_numpy(s).float().unsqueeze(0) for s in batch.state])
-        # unsqueeze(1) adds action dimension 
+        state_batch = torch.cat(
+            [torch.from_numpy(s).float().unsqueeze(0) for s in batch.state]
+        )
+        # unsqueeze(1) adds action dimension
         action_batch = torch.tensor(batch.action).long().unsqueeze(1)
         reward_batch = torch.tensor(batch.reward).float()
 
@@ -107,23 +119,29 @@ class VanillaDQNAgent(BaseAgent):
         next_state_values = torch.zeros(self.batch_size)
         # Identify which next_states are not terminal (i.e., not None)
         non_final_mask = torch.tensor(
-            [next_state is not None for next_state in batch.next_state], dtype=torch.bool
+            [next_state is not None for next_state in batch.next_state],
+            dtype=torch.bool,
         )
 
         # Collect all non-terminal next_states and convert to tensor
-        non_final_next_states = torch.cat([
-            torch.from_numpy(next_state).float().unsqueeze(0)
-            for next_state in batch.next_state if next_state is not None
-        ])
+        non_final_next_states = torch.cat(
+            [
+                torch.from_numpy(next_state).float().unsqueeze(0)
+                for next_state in batch.next_state
+                if next_state is not None
+            ]
+        )
 
         # Compute the target Q-values for non-terminal next_states
-        next_state_values[non_final_mask] = (
-            self.policy_net(non_final_next_states).max(1)[0]
-        )
+        next_state_values[non_final_mask] = self.policy_net(non_final_next_states).max(
+            1
+        )[0]
 
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
-        loss = F.mse_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = F.mse_loss(
+            state_action_values, expected_state_action_values.unsqueeze(1)
+        )
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -138,8 +156,11 @@ class VanillaDQNAgent(BaseAgent):
     def load(self, path):
         self.policy_net.load_state_dict(torch.load(path))
 
+
 # Training loop
-def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score):
+def train(
+    env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score
+):
     agent = VanillaDQNAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
@@ -150,18 +171,18 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
     for episode in range(1, num_episodes + 1):
         state, _ = env.reset()
         episode_reward = 0
-        
+
         for step in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
-            
+
             if done:
                 next_state_for_buffer = None
             else:
                 next_state_for_buffer = next_state
 
-            agent.memory.push(state, action, reward, next_state_for_buffer, done)            
+            agent.memory.push(state, action, reward, next_state_for_buffer, done)
             agent.learn()
 
             state = next_state
@@ -177,9 +198,11 @@ def train(env, state_dim, action_dim, num_episodes, max_steps_per_episode, targe
             print(f"Episode {episode}\tAverage Score: {np.mean(scores_deque):.2f}")
 
         if np.mean(scores_deque) >= target_score:
-            print(f"\nEnvironment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}")
+            print(
+                f"\nEnvironment solved in {episode} episodes! Average Score: {np.mean(scores_deque):.2f}"
+            )
             break
-            
+
     print("\nTraining complete.")
 
     return agent, scores
