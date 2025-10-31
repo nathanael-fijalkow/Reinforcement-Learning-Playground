@@ -13,7 +13,7 @@ pip install -r requirements.txt
 To run the random agent, execute:
 
 ```bash
-python main.py random CartPole-v1
+python main.py random_agent CartPole-v1
 ```
 
 add ``--simulate`` for rendering.
