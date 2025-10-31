@@ -2,6 +2,7 @@ import numpy as np
 from collections import deque
 from src.base_agent import BaseAgent
 
+# implementing sarsa algorithm
 class QLearningAgent(BaseAgent):
     def __init__(self, 
                  state_dim, 
