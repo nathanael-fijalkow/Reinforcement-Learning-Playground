@@ -1,0 +1,14 @@
+.flake8
+plots/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv
+src/__pycache__/
+src/*.pyc
+src/*.pyo
+utils/__pycache__/
+utils/*.pyc
+utils/*.pyo
+.DS_Store
