@@ -38,7 +38,7 @@ class PrioritizedReplayBuffer:
         self.capacity = capacity
         self.memory = []
         self.alpha = alpha  # normalization exponent for priorities
-        self.beta = 0.4  # importance-sampling exponent (can be annealed externally)
+        self.beta = 0.4  # importance-sampling exponent
         # the weights of stored transitions
         self.priorities = np.zeros(capacity)
         self.pos = 0  # position to insert the next transition
@@ -216,14 +216,12 @@ class DQNAgent(BaseAgent):
         elementwise_loss = (
             state_action_values - expected_state_action_values.unsqueeze(1)
         ).pow(2).squeeze()
-        if is_weights is None or len(is_weights) == 0:
-            loss = elementwise_loss.mean()
-        else:
-            # convert is_weights to tensor
-            is_w = torch.tensor(is_weights, dtype=torch.float32)
-            # ensure same device
-            is_w = is_w.to(elementwise_loss.device)
-            loss = (is_w * elementwise_loss).mean()
+
+        # convert is_weights to tensor
+        is_w = torch.tensor(is_weights, dtype=torch.float32)
+        # ensure same device
+        is_w = is_w.to(elementwise_loss.device)
+        loss = (is_w * elementwise_loss).mean()
 
         # Gradient step
         self.optimizer.zero_grad()
@@ -231,11 +229,7 @@ class DQNAgent(BaseAgent):
         self.optimizer.step()
 
         # Update priority in buffer (convert td_errors to numpy floats)
-        try:
-            td_errors_np = td_errors.detach().cpu().numpy()
-        except Exception:
-            # fallback if td_errors is not a tensor requiring grad
-            td_errors_np = np.array(td_errors)
+        td_errors_np = td_errors.detach().cpu().numpy()
 
         # Flatten to 1D list and update priorities
         td_errors_list = np.atleast_1d(td_errors_np).reshape(-1).tolist()
