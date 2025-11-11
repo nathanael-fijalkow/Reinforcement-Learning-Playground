@@ -2,3 +2,6 @@ torch
 gymnasium
 numpy
 matplotlib
+pandas
+seaborn
+optuna
