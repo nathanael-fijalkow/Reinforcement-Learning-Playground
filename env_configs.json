@@ -1,0 +1,22 @@
+{
+  "CartPole-v1": {
+    "num_episodes": 2000,
+    "max_steps": 500,
+    "target_score": 475.0
+  },
+  "FrozenLake-v1": {
+    "num_episodes": 10000,
+    "max_steps": 100,
+    "target_score": 0.95
+  },
+  "MountainCar-v0": {
+    "num_episodes": 50000,
+    "max_steps": 200,
+    "target_score": -110.0
+  },
+  "default": {
+    "num_episodes": 1000,
+    "max_steps": 200,
+    "target_score": 195.0
+  }
+}
