@@ -45,13 +45,17 @@ class PrioritizedReplayBuffer:
 
     def push(self, *args):
         """Save a transition."""
-        # New transitions get maximum priority (use 1.0 if priorities are all zero)
+        # New transitions get high priority but capped at 95th percentile
+        # to avoid outliers dominating sampling
         current_len = len(self.memory)
-        max_p = (
-            float(self.priorities[:current_len].max())
-            if current_len > 0 and self.priorities[:current_len].max() > 0
-            else 1.0
-        )
+        if current_len > 10:
+            # Use 95th percentile to avoid outlier dominance
+            max_p = float(np.percentile(self.priorities[:current_len], 95))
+            max_p = max(max_p, 1.0)  # Ensure minimum priority of 1.0
+        elif current_len > 0 and self.priorities[:current_len].max() > 0:
+            max_p = float(self.priorities[:current_len].max())
+        else:
+            max_p = 1.0
 
         if current_len < self.capacity:
             self.memory.append(None)
@@ -78,7 +82,7 @@ class PrioritizedReplayBuffer:
         if probs_sum <= 0:
             probs = np.ones_like(probs) / len(probs)
         else:
-            probs = probs / probs_sum
+            probs = probs / (probs_sum + 1e-8)  # Add epsilon for stability
 
         # Allow sampling with replacement if batch_size > current memory
         replace = batch_size > len(self.memory)
@@ -92,19 +96,14 @@ class PrioritizedReplayBuffer:
         beta = self.beta
         sampling_probs = probs[indices]
         is_weights = np.power(N * sampling_probs, -beta)
-        is_weights = is_weights / (is_weights.max() + 1e-12)
-
+        is_weights = is_weights / (is_weights.max() + 1e-8)
+        
         return samples, indices, is_weights
 
     def update_priorities(self, indices, errors, epsilon=1e-5):
         """Update priorities of sampled transitions."""
-        # Ensure we can iterate over indices and errors
         for i, error in zip(indices, errors):
-            try:
-                val = float(error)
-            except Exception:
-                # If error is a torch tensor or numpy scalar
-                val = float(np.array(error).astype(float))
+            val = float(error)
             self.priorities[int(i)] = abs(val) + epsilon
 
     def __len__(self):
@@ -145,6 +144,7 @@ class DQNPrioritisedExpReplayAgent(BaseAgent):
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
         self.memory = PrioritizedReplayBuffer(buffer_size)
         self.steps_done = 0
+        self.episodes_done = 0  # Track episodes for beta annealing
 
     def select_action(self, state, greedy=False):
         self.steps_done += 1
@@ -160,32 +160,38 @@ class DQNPrioritisedExpReplayAgent(BaseAgent):
             # item() returns the value as a Python number
             return self.policy_net(state).max(1)[1].item()
 
+    def anneal_beta(self, max_episodes=1000):
+        """Gradually increase beta from 0.4 to 1.0 over training."""
+        beta_start = 0.4
+        beta_end = 1.0
+        progress = min(self.episodes_done / max_episodes, 1.0)
+        self.memory.beta = beta_start + (beta_end - beta_start) * progress
+
     def learn(self):
         # Do not learn if not enough samples in memory
         if len(self.memory) < self.batch_size:
             return
-        batch_transitions, batch_indices, is_weights = self.memory.sample(self.batch_size)
+        
+        # Anneal beta (importance sampling correction)
+        self.anneal_beta()
+        
+        batch_transitions, batch_indices, is_weights = self.memory.sample(
+            self.batch_size
+        )
         batch = Transition(*zip(*batch_transitions))
 
-        # We need to convert batch-array of Transitions to tensors
-        # Each state in batch.state is a numpy array of shape (state_dim,)
-        # So we convert each to tensor and then concatenate along batch dimension
+        # Convert batch-array of Transitions to tensors
         state_batch = torch.cat(
             [torch.from_numpy(s).float().unsqueeze(0) for s in batch.state]
         )
-        # unsqueeze(1) adds action dimension
         action_batch = torch.tensor(batch.action).long().unsqueeze(1)
         reward_batch = torch.tensor(batch.reward).float()
 
         # Compute state-action values using policy_net
-        # self.policy_net(state_batch) has shape (batch_size, action_dim)
-        # gather(1, action_batch) selects the Q-value for the taken action
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
         # Compute next state values using target_net
-        # initialize to zeros (to account for terminal states)
         next_state_values = torch.zeros(self.batch_size)
-        # Identify which next_states are not terminal (i.e., not None)
         non_final_mask = torch.tensor(
             [next_state is not None for next_state in batch.next_state],
             dtype=torch.bool,
@@ -202,24 +208,22 @@ class DQNPrioritisedExpReplayAgent(BaseAgent):
 
         # Compute the target Q-values for non-terminal next_states
         if non_final_next_states.size(0) > 0:
-            next_state_values[non_final_mask] = (
-                self.target_net(non_final_next_states).max(1)[0].detach()
-            )
+            with torch.no_grad():
+                next_state_values[non_final_mask] = (
+                    self.target_net(non_final_next_states).max(1)[0]
+                )
 
-        expected_state_action_values = (next_state_values * self.gamma) + reward_batch
+        expected_state_action_values = (
+            next_state_values * self.gamma
+        ) + reward_batch
 
-        # Compute TD errors (shape: batch_size x 1)
-        td_errors = expected_state_action_values.unsqueeze(1) - state_action_values
-
-        # Compute element-wise MSE loss and apply importance-sampling weights
-        # state_action_values: (batch, 1); expected_state_action_values.unsqueeze(1): (batch,1)
+        # Compute element-wise MSE loss with importance-sampling weights
         elementwise_loss = (
             state_action_values - expected_state_action_values.unsqueeze(1)
         ).pow(2).squeeze()
 
-        # convert is_weights to tensor
+        # Convert is_weights to tensor and apply
         is_w = torch.tensor(is_weights, dtype=torch.float32)
-        # ensure same device
         is_w = is_w.to(elementwise_loss.device)
         loss = (is_w * elementwise_loss).mean()
 
@@ -228,12 +232,19 @@ class DQNPrioritisedExpReplayAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
-        # Update priority in buffer (convert td_errors to numpy floats)
-        td_errors_np = td_errors.detach().cpu().numpy()
+        # Compute TD errors AFTER network update
+        with torch.no_grad():
+            # Re-compute Q-values with updated network
+            updated_q_values = self.policy_net(state_batch).gather(
+                1, action_batch
+            )
+            td_errors = torch.abs(
+                updated_q_values - expected_state_action_values.unsqueeze(1)
+            )
+            td_errors_np = td_errors.cpu().numpy().flatten()
 
-        # Flatten to 1D list and update priorities
-        td_errors_list = np.atleast_1d(td_errors_np).reshape(-1).tolist()
-        self.memory.update_priorities(batch_indices, td_errors_list)
+        # Update priorities with post-update TD errors
+        self.memory.update_priorities(batch_indices, td_errors_np.tolist())
 
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -283,8 +294,14 @@ def train(
             if done:
                 break
 
+        # Increment episodes for beta annealing
+        agent.episodes_done += 1
+
         if episode % agent.target_update == 0:
             agent.update_target_net()
+
+        # Decay exploration
+        agent.epsilon = max(agent.epsilon_min, agent.epsilon * agent.epsilon_decay)
 
         scores_deque.append(episode_reward)
         scores.append(episode_reward)
