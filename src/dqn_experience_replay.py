@@ -1,8 +1,10 @@
+import random
 from collections import deque, namedtuple
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 
 from src.base_agent import BaseAgent
@@ -25,93 +27,28 @@ class DQN(nn.Module):
         return self.net(state)
 
 
+# Replay buffer
 Transition = namedtuple(
     "Transition", ("state", "action", "reward", "next_state", "done")
 )
 
-
-# Prioritized Replay Buffer
-# Prioritized replay buffers determine how likely transitions are to be
-# sampled based on their TD error (importance)
-class PrioritizedReplayBuffer:
-    def __init__(self, capacity, alpha=0.6):
-        self.capacity = capacity
-        self.memory = []
-        self.alpha = alpha  # normalization exponent for priorities
-        self.beta = 0.4  # importance-sampling exponent
-        # the weights of stored transitions
-        self.priorities = np.zeros(capacity)
-        self.pos = 0  # position to insert the next transition
+# Basic replay buffer without prioritization using deque for storage
+class ReplayBuffer:
+    def __init__(self, capacity):
+        self.memory = deque([], maxlen=capacity)
 
     def push(self, *args):
-        """Save a transition."""
-        # New transitions get maximum priority (use 1.0 if priorities are all zero)
-        current_len = len(self.memory)
-        max_p = (
-            float(self.priorities[:current_len].max())
-            if current_len > 0 and self.priorities[:current_len].max() > 0
-            else 1.0
-        )
-
-        if current_len < self.capacity:
-            self.memory.append(None)
-
-        self.memory[self.pos] = Transition(*args)
-        self.priorities[self.pos] = max_p
-        # Update position
-        self.pos = (self.pos + 1) % self.capacity
+        """Save a transition"""
+        self.memory.append(Transition(*args))
 
     def sample(self, batch_size):
-        """Sample a batch of transitions based on their priorities.
-
-        Returns (samples, indices, is_weights)
-        """
-        # If memory is empty, return empty lists
-        if len(self.memory) == 0:
-            return [], [], []
-
-        # Get priorities, apply alpha and small epsilon to avoid zero-sum
-        priorities = self.priorities[: len(self.memory)].astype(float)
-        eps = 1e-6
-        probs = (priorities + eps) ** self.alpha
-        probs_sum = probs.sum()
-        if probs_sum <= 0:
-            probs = np.ones_like(probs) / len(probs)
-        else:
-            probs = probs / probs_sum
-
-        # Allow sampling with replacement if batch_size > current memory
-        replace = batch_size > len(self.memory)
-        indices = np.random.choice(
-            len(self.memory), batch_size, p=probs, replace=replace
-        )
-        samples = [self.memory[i] for i in indices]
-
-        # Importance-sampling weights
-        N = len(self.memory)
-        beta = self.beta
-        sampling_probs = probs[indices]
-        is_weights = np.power(N * sampling_probs, -beta)
-        is_weights = is_weights / (is_weights.max() + 1e-12)
-
-        return samples, indices, is_weights
-
-    def update_priorities(self, indices, errors, epsilon=1e-5):
-        """Update priorities of sampled transitions."""
-        # Ensure we can iterate over indices and errors
-        for i, error in zip(indices, errors):
-            try:
-                val = float(error)
-            except Exception:
-                # If error is a torch tensor or numpy scalar
-                val = float(np.array(error).astype(float))
-            self.priorities[int(i)] = abs(val) + epsilon
+        return random.sample(self.memory, batch_size)
 
     def __len__(self):
         return len(self.memory)
 
 
-class DQNAgent(BaseAgent):
+class DQNExpReplayAgent(BaseAgent):
     def __init__(
         self,
         state_dim,
@@ -123,7 +60,6 @@ class DQNAgent(BaseAgent):
         epsilon_min=0.01,
         buffer_size=10000,
         batch_size=64,
-        target_update=10,
     ):
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -132,18 +68,11 @@ class DQNAgent(BaseAgent):
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.batch_size = batch_size
-        self.target_update = target_update
 
         self.policy_net = DQN(state_dim, action_dim)
-        self.target_net = DQN(state_dim, action_dim)
-        # copy weights from policy_net to target_net
-        self.update_target_net()
-
-        # freeze target_net parameters
-        self.target_net.eval()
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
-        self.memory = PrioritizedReplayBuffer(buffer_size)
+        self.memory = ReplayBuffer(buffer_size)
         self.steps_done = 0
 
     def select_action(self, state, greedy=False):
@@ -156,7 +85,8 @@ class DQNAgent(BaseAgent):
             # unsqueeze(0) adds batch dimension
             state = torch.from_numpy(state).float().unsqueeze(0)
 
-            # max(1) returns (value, index). take [1] for the index
+            # max(1) returns (value, index)
+            # we want the index of the max log-probability so we take [1] from the result
             # item() returns the value as a Python number
             return self.policy_net(state).max(1)[1].item()
 
@@ -164,8 +94,9 @@ class DQNAgent(BaseAgent):
         # Do not learn if not enough samples in memory
         if len(self.memory) < self.batch_size:
             return
-        batch_transitions, batch_indices, is_weights = self.memory.sample(self.batch_size)
-        batch = Transition(*zip(*batch_transitions))
+
+        transitions = self.memory.sample(self.batch_size)
+        batch = Transition(*zip(*transitions))
 
         # We need to convert batch-array of Transitions to tensors
         # Each state in batch.state is a numpy array of shape (state_dim,)
@@ -201,46 +132,22 @@ class DQNAgent(BaseAgent):
         )
 
         # Compute the target Q-values for non-terminal next_states
-        if non_final_next_states.size(0) > 0:
-            next_state_values[non_final_mask] = (
-                self.target_net(non_final_next_states).max(1)[0].detach()
-            )
+        next_state_values[non_final_mask] = self.policy_net(non_final_next_states).max(
+            1
+        )[0]
 
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
-        # Compute TD errors (shape: batch_size x 1)
-        td_errors = expected_state_action_values.unsqueeze(1) - state_action_values
+        loss = F.mse_loss(
+            state_action_values, expected_state_action_values.unsqueeze(1)
+        )
 
-        # Compute element-wise MSE loss and apply importance-sampling weights
-        # state_action_values: (batch, 1); expected_state_action_values.unsqueeze(1): (batch,1)
-        elementwise_loss = (
-            state_action_values - expected_state_action_values.unsqueeze(1)
-        ).pow(2).squeeze()
-
-        # convert is_weights to tensor
-        is_w = torch.tensor(is_weights, dtype=torch.float32)
-        # ensure same device
-        is_w = is_w.to(elementwise_loss.device)
-        loss = (is_w * elementwise_loss).mean()
-
-        # Gradient step
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        # Update priority in buffer (convert td_errors to numpy floats)
-        td_errors_np = td_errors.detach().cpu().numpy()
-
-        # Flatten to 1D list and update priorities
-        td_errors_list = np.atleast_1d(td_errors_np).reshape(-1).tolist()
-        self.memory.update_priorities(batch_indices, td_errors_list)
-
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
-
-    def update_target_net(self):
-        # copy weights from policy_net to target_net
-        self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def save(self, path):
         torch.save(self.policy_net.state_dict(), path)
@@ -253,7 +160,7 @@ class DQNAgent(BaseAgent):
 def train(
     env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score
 ):
-    agent = DQNAgent(state_dim, action_dim)
+    agent = DQNExpReplayAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
@@ -282,9 +189,6 @@ def train(
 
             if done:
                 break
-
-        if episode % agent.target_update == 0:
-            agent.update_target_net()
 
         scores_deque.append(episode_reward)
         scores.append(episode_reward)

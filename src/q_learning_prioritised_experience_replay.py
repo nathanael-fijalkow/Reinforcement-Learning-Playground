@@ -58,7 +58,7 @@ class PrioritizedReplayBuffer:
         return len(self.memory)
 
 
-class QLearningExpReplayAgent(BaseAgent):
+class QLearningPrioritisedExpReplayAgent(BaseAgent):
     def __init__(
         self,
         state_dim,
@@ -120,7 +120,7 @@ class QLearningExpReplayAgent(BaseAgent):
 def train(
     env, state_dim, action_dim, num_episodes, max_steps_per_episode, target_score
 ):
-    agent = QLearningExpReplayAgent(state_dim, action_dim)
+    agent = QLearningPrioritisedExpReplayAgent(state_dim, action_dim)
 
     scores_deque = deque(maxlen=100)
     scores = []
