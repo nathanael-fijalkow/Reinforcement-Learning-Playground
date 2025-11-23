@@ -182,6 +182,12 @@ def main():
     )
     parser.add_argument("environment", help="Gymnasium environment name")
     parser.add_argument(
+        "--algorithm",
+        type=str,
+        default=None,
+        help="Specific algorithm to benchmark (if not specified, runs all compatible algorithms)",
+    )
+    parser.add_argument(
         "--num-seeds", type=int, default=10, help="Number of random seeds to run"
     )
     parser.add_argument(
@@ -240,9 +246,24 @@ def main():
         print(f"No compatible algorithms found for {setting} environment!")
         return
     
-    print(f"\nCompatible algorithms ({len(compatible_algos)}):")
-    for name in compatible_algos.keys():
-        print(f"  - {name}")
+    # Filter to single algorithm if specified
+    if args.algorithm:
+        if args.algorithm not in compatible_algos:
+            if args.algorithm in all_algorithms:
+                print(f"Error: Algorithm '{args.algorithm}' is not compatible with {setting} environment!")
+                print(f"This algorithm requires: {all_algorithms[args.algorithm]['setting']}")
+            else:
+                print(f"Error: Algorithm '{args.algorithm}' not found!")
+                print(f"\nAvailable algorithms:")
+                for name in sorted(all_algorithms.keys()):
+                    print(f"  - {name} ({all_algorithms[name]['setting']})")
+            return
+        compatible_algos = {args.algorithm: compatible_algos[args.algorithm]}
+        print(f"\nRunning single algorithm: {args.algorithm}")
+    else:
+        print(f"\nCompatible algorithms ({len(compatible_algos)}):")
+        for name in compatible_algos.keys():
+            print(f"  - {name}")
     
     # Get environment parameters from config
     num_episodes, max_steps, target_score = get_env_params(
