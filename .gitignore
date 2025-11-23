@@ -1,5 +1,4 @@
 .flake8
-plots/
 __pycache__/
 *.pyc
 *.pyo
