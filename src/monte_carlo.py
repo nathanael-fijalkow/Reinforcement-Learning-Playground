@@ -6,13 +6,37 @@ from src.base_agent import BaseAgent
 
 
 class MonteCarlo(BaseAgent):
+    """
+    Monte Carlo control agent using every-visit MC updates with tabular representation.
+    
+    Monte Carlo methods learn from complete episodes rather than bootstrapping.
+    Q-values are updated toward the actual observed returns:
+    Q(s,a) ← Q(s,a) + α[G_t - Q(s,a)]
+    
+    where G_t is the discounted return from time t to the end of the episode.
+    
+    This is an every-visit implementation, meaning all occurrences of each
+    state-action pair in an episode are updated (as opposed to first-visit
+    which only updates the first occurrence).
+    
+    Parameters:
+        state_dim: Number of discrete states in the environment
+        action_dim: Number of discrete actions available
+        learning_rate: Step size for Q-value updates (α)
+        lr_decay: Multiplicative decay factor for learning rate
+        lr_min: Minimum learning rate value
+        gamma: Discount factor for future rewards (γ)
+        epsilon: Initial exploration rate for ε-greedy policy
+        epsilon_decay: Multiplicative decay factor for epsilon
+        epsilon_min: Minimum epsilon value
+    """
     def __init__(
         self,
         state_dim,
         action_dim,
         learning_rate=0.1,
-        lr_decay=0.995,
-        lr_min=0.001,
+        lr_decay=0.999,  # Slower decay for high-variance environments
+        lr_min=0.01,  # Higher minimum to keep learning
         gamma=0.99,
         epsilon=1.0,
         epsilon_decay=0.995,
@@ -35,12 +59,23 @@ class MonteCarlo(BaseAgent):
             return np.argmax(self.q_table[state, :])
 
     def learn(self, trajectory):
+        """
+        Update Q-values using every-visit Monte Carlo.
+        
+        Processes the trajectory in reverse to efficiently compute discounted returns.
+        Each state-action pair encountered in the trajectory is updated toward
+        the actual return observed from that point onward.
+        
+        Args:
+            trajectory: List of (state, action, reward) tuples from one complete episode
+        """
         G = 0
         for state, action, reward in reversed(trajectory):
             G = reward + self.gamma * G
             self.q_table[state, action] += self.lr * (G - self.q_table[state, action])
 
-        self.lr *= max(self.lr_min, self.lr * self.lr_decay)
+        # Decay learning rate and epsilon after each episode
+        self.lr = max(self.lr_min, self.lr * self.lr_decay)
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
     def save(self, path):

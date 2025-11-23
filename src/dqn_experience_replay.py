@@ -12,6 +12,7 @@ from src.base_agent import BaseAgent
 
 # Q-Network
 class DQN(nn.Module):
+    """Deep Q-Network: neural network for approximating Q-values."""
     def __init__(self, state_dim, action_dim, hidden_size=128):
         super(DQN, self).__init__()
 
@@ -32,8 +33,14 @@ Transition = namedtuple(
     "Transition", ("state", "action", "reward", "next_state", "done")
 )
 
-# Basic replay buffer without prioritization using deque for storage
+
 class ReplayBuffer:
+    """
+    Experience replay buffer for DQN.
+    
+    Stores transitions and samples random batches to break correlation
+    between consecutive samples, improving training stability.
+    """
     def __init__(self, capacity):
         self.memory = deque([], maxlen=capacity)
 
@@ -49,6 +56,36 @@ class ReplayBuffer:
 
 
 class DQNExpReplayAgent(BaseAgent):
+    """
+    Deep Q-Network (DQN) with experience replay and target network.
+    
+    DQN combines three key innovations:
+    1. Q-learning with neural network function approximation
+    2. Experience replay buffer to break sample correlation
+    3. Separate target network for stable Q-value targets
+    
+    The target network is a copy of the policy network that is updated
+    periodically (not every step). This prevents the "moving target" problem
+    where both the predicted Q-values and the target Q-values change
+    simultaneously, causing training instability.
+    
+    Update rule:
+    Q(s,a) ← Q(s,a) + α[r + γ max_a' Q_target(s',a') - Q(s,a)]
+    
+    Reference: Mnih et al. (2015) "Human-level control through deep RL"
+    
+    Parameters:
+        state_dim: Dimension of state space
+        action_dim: Number of discrete actions
+        lr: Learning rate for optimizer
+        gamma: Discount factor for future rewards
+        epsilon: Initial exploration rate
+        epsilon_decay: Multiplicative decay for epsilon
+        epsilon_min: Minimum epsilon value
+        buffer_size: Maximum replay buffer capacity
+        batch_size: Number of transitions per training batch
+        target_update_freq: Steps between target network updates
+    """
     def __init__(
         self,
         state_dim,
@@ -60,6 +97,7 @@ class DQNExpReplayAgent(BaseAgent):
         epsilon_min=0.01,
         buffer_size=10000,
         batch_size=64,
+        target_update_freq=1000,
     ):
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -68,15 +106,21 @@ class DQNExpReplayAgent(BaseAgent):
         self.epsilon_decay = epsilon_decay
         self.epsilon_min = epsilon_min
         self.batch_size = batch_size
+        self.target_update_freq = target_update_freq
 
+        # Policy network (updated every step)
         self.policy_net = DQN(state_dim, action_dim)
+        
+        # Target network (updated periodically for stability)
+        self.target_net = DQN(state_dim, action_dim)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()  # Set to evaluation mode
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
         self.memory = ReplayBuffer(buffer_size)
         self.steps_done = 0
 
     def select_action(self, state, greedy=False):
-        self.steps_done += 1
         if not greedy and np.random.rand() <= self.epsilon:
             return np.random.choice(self.action_dim)
         else:
@@ -91,6 +135,7 @@ class DQNExpReplayAgent(BaseAgent):
             return self.policy_net(state).max(1)[1].item()
 
     def learn(self):
+        """Update policy network using batch from replay buffer."""
         # Do not learn if not enough samples in memory
         if len(self.memory) < self.batch_size:
             return
@@ -113,7 +158,7 @@ class DQNExpReplayAgent(BaseAgent):
         # gather(1, action_batch) selects the Q-value for the taken action
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
-        # Compute next state values using target_net
+        # Compute next state values using target_net (KEY: use target network!)
         # initialize to zeros (to account for terminal states)
         next_state_values = torch.zeros(self.batch_size)
         # Identify which next_states are not terminal (i.e., not None)
@@ -132,9 +177,11 @@ class DQNExpReplayAgent(BaseAgent):
         )
 
         # Compute the target Q-values for non-terminal next_states
-        next_state_values[non_final_mask] = self.policy_net(non_final_next_states).max(
-            1
-        )[0]
+        # Use target network for stability (prevents moving target problem)
+        with torch.no_grad():
+            next_state_values[non_final_mask] = (
+                self.target_net(non_final_next_states).max(1)[0]
+            )
 
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
@@ -145,15 +192,31 @@ class DQNExpReplayAgent(BaseAgent):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        
+        # Update target network periodically
+        self.steps_done += 1
+        if self.steps_done % self.target_update_freq == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def save(self, path):
-        torch.save(self.policy_net.state_dict(), path)
+        torch.save(
+            {
+                "policy_net": self.policy_net.state_dict(),
+                "target_net": self.target_net.state_dict(),
+                "optimizer": self.optimizer.state_dict(),
+                "steps_done": self.steps_done,
+            },
+            path,
+        )
 
     def load(self, path):
-        self.policy_net.load_state_dict(torch.load(path))
+        checkpoint = torch.load(path)
+        self.policy_net.load_state_dict(checkpoint["policy_net"])
+        self.target_net.load_state_dict(checkpoint["target_net"])
+        if "optimizer" in checkpoint:
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
+        if "steps_done" in checkpoint:
+            self.steps_done = checkpoint["steps_done"]
 
 
 # Training loop
@@ -182,12 +245,22 @@ def train(
                 next_state_for_buffer = next_state
 
             agent.memory.push(state, action, reward, next_state_for_buffer, done)
-            agent.learn()
+            
+            # Learn periodically (every 4 steps) instead of every step
+            # This improves stability and reduces computational cost
+            if step % 4 == 0:
+                agent.learn()
 
             state = next_state
             episode_reward += reward
 
             if done:
+                # Learn one final time at episode end
+                agent.learn()
+                # Decay epsilon after each episode
+                agent.epsilon = max(
+                    agent.epsilon_min, agent.epsilon * agent.epsilon_decay
+                )
                 break
 
         scores_deque.append(episode_reward)

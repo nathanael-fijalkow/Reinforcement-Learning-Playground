@@ -131,20 +131,25 @@ def train(
         state, _ = env.reset()
         episode_reward = 0
 
-        for _ in range(max_steps_per_episode):
+        for step in range(max_steps_per_episode):
             action = agent.select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
             # Store the transition in memory
             agent.memory.push(state, action, reward, next_state, done)
-            # Performs one step of the learning process
-            agent.learn()
+            
+            # Learn periodically (every 4 steps) instead of every step
+            # This reduces computational cost and improves stability
+            if step % 4 == 0:
+                agent.learn()
 
             state = next_state
             episode_reward += reward
 
             if done:
+                # Learn one final time at episode end
+                agent.learn()
                 agent.epsilon = max(
                     agent.epsilon_min, agent.epsilon * agent.epsilon_decay
                 )
