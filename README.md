@@ -2,6 +2,18 @@
 
 A modular codebase for experimenting with reinforcement learning agents on classic environments. Includes tabular and deep RL algorithms, benchmarking, hyperparameter tuning, and automated plotting.
 
+## Course Slides
+
+Comprehensive lecture slides covering RL theory and algorithms are available in the `slides/` directory:
+
+- 1 - Multi armed bandits.pdf
+- 2 - Markov Decision Process.pdf
+- 3 - Value-based approaches.pdf
+- 4 - DQN.pdf
+- 5 - Experience replay and off policy algorithms.pdf
+- 6 - REINFORCE.pdf
+- 7 - Actor critic methods.pdf
+
 ## Features
 - Tabular RL agents (Q-Learning, SARSA, Dyna-Q, Monte Carlo)
 - Deep RL agents (DQN, PPO, Actor-Critic, REINFORCE)
