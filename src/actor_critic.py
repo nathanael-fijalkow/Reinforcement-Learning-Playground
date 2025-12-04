@@ -47,7 +47,6 @@ class Critic(nn.Module):
 
 # --- 3. Define the Actor-Critic Agent ---
 # This class combines the Actor and Critic, handles training, and action selection.
-# Improvements: entropy bonus, gradient clipping, value clipping, batch collection
 class ActorCriticAgent(BaseAgent):
     def __init__(
         self,
@@ -84,14 +83,14 @@ class ActorCriticAgent(BaseAgent):
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=lr_critic)
 
         self.gamma = gamma
-        # IMPROVEMENT: Entropy coefficient for exploration bonus
+        # Entropy coefficient for exploration bonus
         # Prevents premature convergence to deterministic policies
         self.entropy_coef = entropy_coef
-        # IMPROVEMENT: Value clipping to prevent large value function updates
+        # Value clipping to prevent large value function updates
         self.value_clip = value_clip
-        # IMPROVEMENT: Gradient clipping to prevent exploding gradients
+        # Gradient clipping to prevent exploding gradients
         self.max_grad_norm = max_grad_norm
-        # IMPROVEMENT: Batch size - collect multiple episodes before updating
+        # Batch size - collect multiple episodes before updating
         self.batch_size = batch_size
 
         # Buffers for current episode
@@ -101,7 +100,7 @@ class ActorCriticAgent(BaseAgent):
         self.episode_dones = []
         self.episode_states = []
 
-        # IMPROVEMENT: Batch buffers for collecting multiple episodes before update
+        # Batch buffers for collecting multiple episodes before update
         # Previous implementation updated after every single episode
         self.batch_log_probs = []
         self.batch_rewards = []
@@ -148,7 +147,7 @@ class ActorCriticAgent(BaseAgent):
 
     def end_episode(self, next_state=None, done=True):
         """
-        IMPROVEMENT: New method for proper episode management and batch collection.
+        New method for proper episode management and batch collection.
         Called at end of episode to finalize episode data and add to batch.
         When batch is full, triggers learning. This enables collecting multiple
         episodes before updating, improving sample efficiency.
@@ -175,7 +174,7 @@ class ActorCriticAgent(BaseAgent):
 
         self.episodes_collected += 1
 
-        # IMPROVEMENT: Learn only when batch is full (not after every episode)
+        # Learn only when batch is full (not after every episode)
         # This improves sample efficiency and training stability
         if self.episodes_collected >= self.batch_size:
             self.learn()
@@ -218,12 +217,12 @@ class ActorCriticAgent(BaseAgent):
 
         # Get current log probs and values for entropy calculation
         new_log_probs_dist = torch.distributions.Categorical(logits=log_probs)
-        # IMPROVEMENT: Entropy bonus encourages exploration and prevents
+        # Entropy bonus encourages exploration and prevents
         # premature convergence to deterministic policies
         entropy = new_log_probs_dist.entropy().mean()
 
         # --- Critic Loss with Value Clipping ---
-        # IMPROVEMENT: Value function clipping (similar to PPO)
+        # Value function clipping (similar to PPO)
         # Prevents destructively large updates to the value function
         new_values = old_values  # In A2C we use the same values
         value_pred_clipped = old_values + torch.clamp(
@@ -237,7 +236,7 @@ class ActorCriticAgent(BaseAgent):
 
         # --- Actor Loss ---
         # Actor aims to maximize expected return, so we minimize -log_prob * advantage
-        # IMPROVEMENT: Add entropy bonus to actor loss
+        # Add entropy bonus to actor loss
         # Encourages exploration by rewarding policy diversity
         actor_loss = (
             -(log_probs * advantage.detach()).mean() - self.entropy_coef * entropy
@@ -247,14 +246,14 @@ class ActorCriticAgent(BaseAgent):
         # Update critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-        # IMPROVEMENT: Gradient clipping prevents exploding gradients
+        # Gradient clipping prevents exploding gradients
         nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
         self.critic_optimizer.step()
 
         # Update actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
-        # IMPROVEMENT: Gradient clipping prevents exploding gradients
+        # Gradient clipping prevents exploding gradients
         nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
         self.actor_optimizer.step()
 

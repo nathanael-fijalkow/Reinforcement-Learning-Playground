@@ -47,7 +47,6 @@ class Critic(nn.Module):
 
 # --- 3. Define the PPO Agent ---
 # This class combines the Actor and Critic, handles training, and action selection.
-# Improvements: entropy bonus, gradient clipping, value clipping, batch collection
 class PPOAgent(BaseAgent):
     def __init__(
         self,
@@ -63,6 +62,7 @@ class PPOAgent(BaseAgent):
         value_clip=0.2,
         max_grad_norm=0.5,
         batch_size=5,
+        minibatch_size=64,
     ):
         """
         PPO agent with additional improvements.
@@ -80,6 +80,7 @@ class PPOAgent(BaseAgent):
             value_clip: Clipping parameter for value function loss
             max_grad_norm: Maximum gradient norm for clipping
             batch_size: Number of episodes to collect before updating
+            minibatch_size: Size of mini-batches for SGD updates
         """
         # Initialize actor and critic networks
         self.actor = Actor(state_dim, action_dim)
@@ -93,15 +94,17 @@ class PPOAgent(BaseAgent):
         self.epsilon_clip = epsilon_clip
         self.K_epochs = K_epochs
         self.gae_lambda = gae_lambda
-        # IMPROVEMENT: Entropy coefficient for exploration bonus
+        # Entropy coefficient for exploration bonus
         # Prevents premature convergence to deterministic policies
         self.entropy_coef = entropy_coef
-        # IMPROVEMENT: Value clipping to prevent large value function updates
+        # Value clipping to prevent large value function updates
         self.value_clip = value_clip
-        # IMPROVEMENT: Gradient clipping to prevent exploding gradients
+        # Gradient clipping to prevent exploding gradients
         self.max_grad_norm = max_grad_norm
-        # IMPROVEMENT: Batch size - collect multiple episodes before updating
+        # Batch size - collect multiple episodes before updating
         self.batch_size = batch_size
+        # Mini-batch size for SGD updates during optimization
+        self.minibatch_size = minibatch_size
 
         # Buffers for current episode
         self.episode_states = []
@@ -111,7 +114,7 @@ class PPOAgent(BaseAgent):
         self.episode_values = []
         self.episode_dones = []
 
-        # IMPROVEMENT: Batch buffers for collecting multiple episodes before update
+        # Batch buffers for collecting multiple episodes before update
         # Previous implementation updated after every single episode
         self.batch_states = []
         self.batch_actions = []
@@ -164,7 +167,7 @@ class PPOAgent(BaseAgent):
 
     def end_episode(self, next_state=None, done=True):
         """
-        IMPROVEMENT: New method for proper episode management and batch collection.
+        New method for proper episode management and batch collection.
         Called at end of episode to finalize episode data and add to batch.
         When batch is full, triggers learning. This enables collecting multiple
         episodes before updating, improving sample efficiency.
@@ -208,7 +211,7 @@ class PPOAgent(BaseAgent):
 
         self.episodes_collected += 1
 
-        # IMPROVEMENT: Learn only when batch is full (not after every episode)
+        # Learn only when batch is full (not after every episode)
         # This improves sample efficiency and training stability
         if self.episodes_collected >= self.batch_size:
             self.learn()
@@ -284,62 +287,86 @@ class PPOAgent(BaseAgent):
         # Normalize advantages (important for stability)
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-        # PPO Optimization Loop (K_epochs)
-        for _ in range(self.K_epochs):
-            # Get new log probabilities and values
-            new_log_probs_dist = torch.distributions.Categorical(
-                logits=self.actor(old_states)
-            )
-            new_log_probs = new_log_probs_dist.log_prob(old_actions)
-            new_values = self.critic(old_states).squeeze()
+        # Get total batch size
+        batch_size = old_states.size(0)
+
+        # PPO Optimization with Mini-Batches
+        # Standard PPO shuffles data and processes in mini-batches for each epoch
+        for epoch in range(self.K_epochs):
+            # Generate random permutation for shuffling
+            indices = torch.randperm(batch_size)
             
-            # IMPROVEMENT: Entropy bonus encourages exploration and prevents
-            # premature convergence to deterministic policies
-            entropy = new_log_probs_dist.entropy().mean()
+            # Process data in mini-batches
+            for start_idx in range(0, batch_size, self.minibatch_size):
+                end_idx = min(start_idx + self.minibatch_size, batch_size)
+                minibatch_indices = indices[start_idx:end_idx]
+                
+                # Extract mini-batch
+                mb_states = old_states[minibatch_indices]
+                mb_actions = old_actions[minibatch_indices]
+                mb_old_log_probs = old_log_probs[minibatch_indices]
+                mb_old_values = old_values[minibatch_indices]
+                mb_advantages = advantages[minibatch_indices]
+                mb_returns = returns[minibatch_indices]
+                
+                # Get new log probabilities and values for mini-batch
+                new_log_probs_dist = torch.distributions.Categorical(
+                    logits=self.actor(mb_states)
+                )
+                new_log_probs = new_log_probs_dist.log_prob(mb_actions)
+                new_values = self.critic(mb_states).squeeze()
+                
+                # Entropy bonus encourages exploration and prevents
+                # premature convergence to deterministic policies
+                entropy = new_log_probs_dist.entropy().mean()
 
-            # --- Critic Loss with Value Clipping ---
-            # IMPROVEMENT: Value function clipping (similar to policy clipping)
-            # Prevents destructively large updates to the value function
-            # Takes the maximum of clipped and unclipped loss for conservatism
-            value_pred_clipped = old_values + torch.clamp(
-                new_values - old_values,
-                -self.value_clip,
-                self.value_clip
-            )
-            value_loss_unclipped = F.mse_loss(new_values, returns.detach())
-            value_loss_clipped = F.mse_loss(value_pred_clipped, returns.detach())
-            critic_loss = torch.max(value_loss_unclipped, value_loss_clipped)
+                # --- Critic Loss with Value Clipping ---
+                # Value function clipping (similar to policy clipping)
+                # Prevents destructively large updates to the value function
+                # Takes the maximum of clipped and unclipped loss for conservatism
+                value_pred_clipped = mb_old_values + torch.clamp(
+                    new_values - mb_old_values,
+                    -self.value_clip,
+                    self.value_clip
+                )
+                value_loss_unclipped = F.mse_loss(new_values, mb_returns.detach())
+                value_loss_clipped = F.mse_loss(
+                    value_pred_clipped, mb_returns.detach()
+                )
+                critic_loss = torch.max(value_loss_unclipped, value_loss_clipped)
 
-            # --- Actor Loss (Clipped Surrogate Objective) ---
-            # Ratio of new policy probability to old policy probability
-            ratio = torch.exp(new_log_probs - old_log_probs.detach())
+                # --- Actor Loss (Clipped Surrogate Objective) ---
+                # Ratio of new policy probability to old policy probability
+                ratio = torch.exp(new_log_probs - mb_old_log_probs.detach())
 
-            # Clipped surrogate objective
-            surr1 = ratio * advantages
-            surr2 = (
-                torch.clamp(ratio, 1 - self.epsilon_clip, 1 + self.epsilon_clip)
-                * advantages
-            )
-            # IMPROVEMENT: Add entropy bonus to actor loss
-            # Encourages exploration by rewarding policy diversity
-            actor_loss = (
-                -torch.min(surr1, surr2).mean() - self.entropy_coef * entropy
-            )
+                # Clipped surrogate objective
+                surr1 = ratio * mb_advantages
+                surr2 = (
+                    torch.clamp(ratio, 1 - self.epsilon_clip, 1 + self.epsilon_clip)
+                    * mb_advantages
+                )
+                # Add entropy bonus to actor loss
+                # Encourages exploration by rewarding policy diversity
+                actor_loss = (
+                    -torch.min(surr1, surr2).mean() - self.entropy_coef * entropy
+                )
 
-            # --- Update Networks with Gradient Clipping ---
-            # Update critic
-            self.critic_optimizer.zero_grad()
-            critic_loss.backward()
-            # IMPROVEMENT: Gradient clipping prevents exploding gradients
-            nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
-            self.critic_optimizer.step()
+                # --- Update Networks with Gradient Clipping ---
+                # Update critic
+                self.critic_optimizer.zero_grad()
+                critic_loss.backward()
+                # Gradient clipping prevents exploding gradients
+                nn.utils.clip_grad_norm_(
+                    self.critic.parameters(), self.max_grad_norm
+                )
+                self.critic_optimizer.step()
 
-            # Update actor
-            self.actor_optimizer.zero_grad()
-            actor_loss.backward()
-            # IMPROVEMENT: Gradient clipping prevents exploding gradients
-            nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
-            self.actor_optimizer.step()
+                # Update actor
+                self.actor_optimizer.zero_grad()
+                actor_loss.backward()
+                # Gradient clipping prevents exploding gradients
+                nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
+                self.actor_optimizer.step()
 
         # Clear batch buffers
         self.batch_states = []
